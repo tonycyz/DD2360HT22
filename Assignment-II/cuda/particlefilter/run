@@ -1,0 +1,2 @@
+./particlefilter_naive -x 512 -y 512 -z 100 -np 100000
+./particlefilter_float -x 512 -y 512 -z 100 -np 100000
