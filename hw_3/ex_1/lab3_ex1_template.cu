@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <sys/time.h>
+#include <math.h>
 
 #define DataType double
 
@@ -36,7 +37,7 @@ int main(int argc, char **argv) {
     DataType *deviceOutput;
 
     //@@ Insert code below to read in inputLength from args
-    int inputLength = atoi(argv[1]);
+    inputLength = atoi(argv[1]);
     printf("The input length is %d\n", inputLength);
   
     //@@ Insert code below to allocate Host memory for input and output
@@ -46,8 +47,8 @@ int main(int argc, char **argv) {
 
     //@@ Insert code below to initialize hostInput1 and hostInput2 to random numbers, and create reference result in CPU
     for (int i = 0; i < inputLength; i++) {
-        hostInput1[i] = rand() / RAND_MAX;
-        hostInput2[i] = rand() / RAND_MAX;
+        hostInput1[i] = (double) rand() / RAND_MAX;
+        hostInput2[i] = (double) rand() / RAND_MAX;
     }  
   
     //@@ Insert code below to allocate GPU memory here
@@ -65,18 +66,20 @@ int main(int argc, char **argv) {
     dim3 dimBlock(32, 1, 1);
 
     //@@ Launch the GPU Kernel here
-    timerStart();
+    // timerStart();
     vecAdd<<<dimGrid, dimBlock>>>(deviceInput1, deviceInput2, deviceOutput, inputLength);
-    double time_elapsed = timerStop();
-    printf("Kernel execution time: %.5lf\n", time_elapsed);
+    // double time_elapsed = timerStop();
+    // printf("Kernel execution time: %.5lf ms \n", time_elapsed);
 
     //@@ Copy the GPU memory back to the CPU here
     cudaMemcpy(hostOutput, deviceOutput, sizeof(DataType) * inputLength, cudaMemcpyDeviceToHost);
 
     //@@ Insert code below to compare the output with the reference
     bool correct = true;
+    resultRef = (DataType*)malloc(sizeof(DataType) * inputLength);
     for (int i = 0; i < inputLength; i++) {
-        if (hostOutput[i] != resultRef[i]) {
+        resultRef[i] = hostInput1[i] + hostInput2[i];
+        if (fabs(hostOutput[i] - resultRef[i]) > 1e-8) {
             correct = false;
             break;
         }
@@ -93,6 +96,7 @@ int main(int argc, char **argv) {
     free(hostInput1);
     free(hostInput2);
     free(hostOutput);
+    free(resultRef);
     return 0;
 }
 
