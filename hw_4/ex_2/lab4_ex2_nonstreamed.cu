@@ -14,7 +14,6 @@ __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
 
 int main(int argc, char **argv) {
     int inputLength;
-    int S_seg; // number of segments
 
     DataType *hostInput1;
     DataType *hostInput2;
@@ -27,10 +26,6 @@ int main(int argc, char **argv) {
     //@@ Insert code below to read in inputLength from args
     inputLength = atoi(argv[1]);
     printf("The input length is %d\n", inputLength);
-    S_seg = atoi(argv[2]);
-    printf("The length of each segment is %d\n", S_seg);
-    const int num_segments = ceil(inputLength / S_seg);
-    printf("The number of segments is %d\n", num_segments);
 
     // @@ Insert code below to allocate Host memory for input and output
     // To launch kernel on different stream, Pinned-memory must be used. Why? 
@@ -49,29 +44,18 @@ int main(int argc, char **argv) {
     cudaMalloc((void**) &deviceInput2, sizeof(DataType) * inputLength);
     cudaMalloc((void**) &deviceOutput, sizeof(DataType) * inputLength);
 
-    // Create CUDA streams
-    cudaStream_t streams[num_segments]; 
-    for(int i = 0; i < num_segments; i++) {
-        cudaStreamCreate(&streams[i]);
-    }
-
-    dim3 dimGrid(ceil(S_seg / 256));
-    dim3 dimBlock(256);
+    cudaMemcpy(deviceInput1, hostInput1, inputLength * sizeof(DataType), cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceInput2, hostInput2, inputLength * sizeof(DataType), cudaMemcpyHostToDevice);
     
-    // Divide the input vector into segments and copy each segment asynchronously to the GPU
-    for(int i = 0; i < num_segments; i++) {
-        int offset = i * S_seg;
-        cudaMemcpyAsync(deviceInput1 + offset, hostInput1 + offset, S_seg * sizeof(DataType), 
-                        cudaMemcpyHostToDevice, streams[i]);
-        cudaMemcpyAsync(deviceInput2 + offset, hostInput2 + offset, S_seg * sizeof(DataType), 
-                        cudaMemcpyHostToDevice, streams[i]); 
-        vecAdd<<<dimGrid, dimBlock, 0, streams[i]>>>
-            (deviceInput1 + offset, deviceInput2 + offset, deviceOutput + offset, S_seg);
-        cudaMemcpyAsync(hostOutput + offset, deviceOutput + offset, S_seg * sizeof(DataType), 
-                        cudaMemcpyDeviceToHost, streams[i]);
-        cudaStreamSynchronize(streams[i]);
-        cudaStreamDestroy(streams[i]);
-    }
+    // Launch the vecAdd kernel on the GPU
+    dim3 dimGrid(ceil(inputLength / 256));
+    dim3 dimBlock(256);
+    vecAdd<<<dimGrid, dimBlock, 0>>>(deviceInput1, deviceInput2, deviceOutput, inputLength);
+
+    cudaMemcpy(hostOutput, deviceOutput, inputLength * sizeof(DataType), cudaMemcpyDeviceToHost);
+
+    // Wait until all issued CUDA calls are complete, i.e., hostOutput is correct
+    cudaDeviceSynchronize();
 
     //@@ Insert code below to compare the output with the reference
     bool correct = true;
