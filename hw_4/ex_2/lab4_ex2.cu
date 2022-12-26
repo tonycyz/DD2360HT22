@@ -2,8 +2,20 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <math.h>
+#include <cuda_profiler_api.h>
 
 #define DataType double
+
+// CPU timer
+struct timeval t_start, t_end;
+void cputimer_start(){
+    gettimeofday(&t_start, 0);
+}
+void cputimer_stop(const char* info){
+    gettimeofday(&t_end, 0);
+    double time = (1000000.0*(t_end.tv_sec-t_start.tv_sec) + t_end.tv_usec-t_start.tv_usec);
+    printf("Timing - %s. \t\tElasped %.0f microseconds \n", info, time);
+}
 
 __global__ void vecAdd(DataType *in1, DataType *in2, DataType *out, int len) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -51,6 +63,12 @@ int main(int argc, char **argv) {
 
     // Create CUDA streams
     cudaStream_t streams[num_segments]; 
+    
+    // Start Timer 
+    // cputimer_start();
+
+    // Start Profiler
+    cudaProfilerStart();
     for(int i = 0; i < num_segments; i++) {
         cudaStreamCreate(&streams[i]);
     }
@@ -69,9 +87,15 @@ int main(int argc, char **argv) {
             (deviceInput1 + offset, deviceInput2 + offset, deviceOutput + offset, S_seg);
         cudaMemcpyAsync(hostOutput + offset, deviceOutput + offset, S_seg * sizeof(DataType), 
                         cudaMemcpyDeviceToHost, streams[i]);
-        cudaStreamSynchronize(streams[i]);
+    }
+    for(int i = 0; i < num_segments; i++) {
         cudaStreamDestroy(streams[i]);
     }
+    cudaDeviceSynchronize();
+
+    // CPU timer stop
+    // cputimer_stop("Streamed VecAdd execution time (H2D + Kernel + D2H)");
+    cudaProfilerStop();
 
     //@@ Insert code below to compare the output with the reference
     bool correct = true;
@@ -83,6 +107,7 @@ int main(int argc, char **argv) {
             break;
         }
     }
+
     printf("Result is %s\n", correct ? "CORRECT" : "INCORRECT");
 
 
